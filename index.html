@@ -528,6 +528,24 @@ body::before {
   transform: scale(0.93);
 }
 
+/* ─── BOTÓN PAUSA ────────────────────────────────────────── */
+#btn-pause {
+  background: var(--bg3);
+  border: 1px solid var(--purple);
+  border-radius: 8px;
+  color: var(--gold);
+  font-size: 1rem;
+  padding: 0.3rem 0.55rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  line-height: 1;
+}
+#btn-pause:hover  { background: var(--purple-dark); border-color: var(--purple-light); }
+#btn-pause.paused { background: var(--purple-dark); border-color: var(--gold); color: var(--gold); }
+
 /* ─── BOTÓN TOGGLE TECLADO / TÁCTIL ─────────────────────── */
 #ctrl-toggle {
   background: var(--bg3);
@@ -716,6 +734,10 @@ body::before {
       <!-- Toggle teclado ↔ táctil: cambia el modo de control en cualquier momento -->
       <button id="ctrl-toggle" onclick="toggleControls()" title="Cambiar modo de control">
         🎮 Teclado
+      </button>
+      <!-- Botón de pausa visible -->
+      <button id="btn-pause" onclick="togglePause()" title="Pausar / Reanudar (P)">
+        ⏸
       </button>
       <div class="score-display">
         <div class="score-val" id="score-val">0</div>
@@ -1281,6 +1303,9 @@ function startGameplay() {
   getAudioCtx(); // Desbloquea el AudioContext con el gesto del botón
   startBgMusic(MEMBERS[currentLevel].id);
   applyControlMode(); // Aplica el modo de control (D-pad o teclado) al iniciar
+  // Resetea el botón de pausa al estado inicial
+  const btn = document.getElementById('btn-pause');
+  if (btn) { btn.textContent = '⏸'; btn.classList.remove('paused'); btn.title = 'Pausar (P)'; }
 }
 
 // ─── TICK PRINCIPAL ─────────────────────────────────────────
@@ -1548,15 +1573,42 @@ function renderGame() {
 
   // ── Ítems de comida ──
   const fontSize = Math.max(10, CELL * 0.65);
+  const pulse    = 0.75 + 0.25 * Math.sin(Date.now() / 350); // 0.75–1.0 pulsando
   ctx.font         = `${fontSize}px serif`;
   ctx.textAlign    = 'center';
   ctx.textBaseline = 'middle';
   for (const f of food) {
-    // Las ARMY bombs tienen un brillo dorado más intenso
-    ctx.shadowColor = f.isSpecial ? '#e8c84a' : m.colorLight;
-    ctx.shadowBlur  = f.isSpecial ? 14 : 8;
-    ctx.fillText(f.emoji, f.x * CELL + CELL/2, f.y * CELL + CELL/2);
+    const cx = f.x * CELL + CELL / 2;
+    const cy = f.y * CELL + CELL / 2;
+    const glowColor = f.isSpecial ? '#e8c84a' : m.colorLight;
+
+    // Halo de fondo pulsante — círculo semitransparente bajo el emoji
+    const haloAlpha = f.isSpecial ? 0.28 + 0.18 * pulse : 0.18 + 0.12 * pulse;
+    ctx.beginPath();
+    ctx.arc(cx, cy, CELL * 0.46 * pulse, 0, Math.PI * 2);
+    ctx.fillStyle = f.isSpecial
+      ? `rgba(232,200,74,${haloAlpha})`
+      : hexToRgba(m.colorLight, haloAlpha);
+    ctx.fill();
+
+    // Anillo exterior brillante
+    ctx.beginPath();
+    ctx.arc(cx, cy, CELL * 0.46 * pulse, 0, Math.PI * 2);
+    ctx.strokeStyle = f.isSpecial
+      ? `rgba(232,200,74,${0.55 * pulse})`
+      : hexToRgba(m.colorLight, 0.45 * pulse);
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Emoji con glow fuerte (múltiples capas de sombra)
+    ctx.shadowColor = glowColor;
+    ctx.shadowBlur  = f.isSpecial ? 28 * pulse : 20 * pulse;
+    ctx.fillText(f.emoji, cx, cy);
+    // Segunda pasada para intensificar el brillo
+    ctx.shadowBlur  = f.isSpecial ? 14 * pulse : 10 * pulse;
+    ctx.fillText(f.emoji, cx, cy);
     ctx.shadowBlur  = 0;
+    ctx.lineWidth   = 1;
   }
 
   // ── Partículas de brillo al comer ──
@@ -1928,14 +1980,7 @@ document.addEventListener('keydown', (e) => {
 
   // P para pausar/reanudar
   if ((e.key === 'p' || e.key === 'P') && !gameState.dead) {
-    gameState.paused = !gameState.paused;
-    if (gameState.paused) {
-      stopBgMusic();
-      showOverlay('⏸ Pausa', '', `<button class="btn btn-primary" onclick="resumeGame()">▶ Continuar</button>`);
-    } else {
-      startBgMusic(MEMBERS[currentLevel].id);
-      hideOverlay();
-    }
+    togglePause();
     return;
   }
 
@@ -1970,8 +2015,25 @@ function mobileDir(dir) {
   }
 }
 
+function togglePause() {
+  if (!gameState || gameState.dead || !gameState.started) return;
+  gameState.paused = !gameState.paused;
+  const btn = document.getElementById('btn-pause');
+  if (gameState.paused) {
+    if (btn) { btn.textContent = '▶'; btn.classList.add('paused'); btn.title = 'Reanudar (P)'; }
+    stopBgMusic();
+    showOverlay('⏸ Pausa', '', `<button class="btn btn-primary" onclick="resumeGame()">▶ Continuar</button>`);
+  } else {
+    if (btn) { btn.textContent = '⏸'; btn.classList.remove('paused'); btn.title = 'Pausar (P)'; }
+    startBgMusic(MEMBERS[currentLevel].id);
+    hideOverlay();
+  }
+}
+
 function resumeGame() {
   gameState.paused = false;
+  const btn = document.getElementById('btn-pause');
+  if (btn) { btn.textContent = '⏸'; btn.classList.remove('paused'); btn.title = 'Pausar (P)'; }
   startBgMusic(MEMBERS[currentLevel].id);
   hideOverlay();
 }
