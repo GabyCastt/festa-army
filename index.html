@@ -487,26 +487,36 @@ body::before {
   display: none;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  margin-top: 0.75rem;
+  gap: 6px;
+  margin-top: 0.5rem;
+  width: 100%;
+  max-width: 520px;
 }
 .mobile-controls.visible { display: flex; }
 
-.ctrl-row { display: flex; gap: 4px; }
+.ctrl-row { display: flex; gap: 6px; width: 100%; justify-content: center; }
 .ctrl-btn {
-  width: 56px; height: 56px;
+  width: clamp(70px, 28vw, 160px);
+  height: clamp(70px, 15vw, 90px);
   background: var(--bg3);
-  border: 1px solid var(--purple-dark);
-  border-radius: 10px;
+  border: 2px solid var(--purple);
+  border-radius: 14px;
   color: var(--text);
-  font-size: 1.3rem;
+  font-size: clamp(1.6rem, 5vw, 2.2rem);
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
-  transition: background 0.1s;
+  touch-action: manipulation;
+  transition: background 0.08s, transform 0.08s;
+  flex: 1;
+  max-width: 160px;
 }
-.ctrl-btn:active { background: var(--purple-dark); }
+.ctrl-btn:active, .ctrl-btn.pressed {
+  background: var(--purple-dark);
+  border-color: var(--purple-light);
+  transform: scale(0.93);
+}
 
 /* ─── BOTÓN TOGGLE TECLADO / TÁCTIL ─────────────────────── */
 #ctrl-toggle {
@@ -717,14 +727,14 @@ body::before {
   </div>
 
   <!-- D-pad táctil (solo visible en dispositivos touch) -->
-  <div class="mobile-controls">
+  <div class="mobile-controls" id="dpad">
     <div class="ctrl-row">
-      <div class="ctrl-btn" ontouchstart="mobileDir('UP')">▲</div>
+      <div class="ctrl-btn" id="btn-up">▲</div>
     </div>
     <div class="ctrl-row">
-      <div class="ctrl-btn" ontouchstart="mobileDir('LEFT')">◀</div>
-      <div class="ctrl-btn" ontouchstart="mobileDir('DOWN')">▼</div>
-      <div class="ctrl-btn" ontouchstart="mobileDir('RIGHT')">▶</div>
+      <div class="ctrl-btn" id="btn-left">◀</div>
+      <div class="ctrl-btn" id="btn-down">▼</div>
+      <div class="ctrl-btn" id="btn-right">▶</div>
     </div>
   </div>
 
@@ -1495,18 +1505,19 @@ function renderGame() {
     // Rota la imagen para que siempre "mire" en la dirección del movimiento
     const angle = Math.atan2(gameState.dir.y, gameState.dir.x) - Math.atan2(0, 1);
     ctx.rotate(angle);
-    // Recorte circular para la foto del bities
+    // Recorte circular para la foto del miembro — 40% más grande que una celda
+    const headR = CELL * 0.7;
     ctx.beginPath();
-    ctx.arc(0, 0, CELL / 2 - pad, 0, Math.PI * 2);
+    ctx.arc(0, 0, headR, 0, Math.PI * 2);
     ctx.clip();
-    ctx.drawImage(gameState.headImg, -CELL/2 + pad, -CELL/2 + pad, CELL - pad*2, CELL - pad*2);
+    ctx.drawImage(gameState.headImg, -headR, -headR, headR * 2, headR * 2);
     ctx.restore();
 
     // Borde circular de color del miembro alrededor de la foto
     ctx.strokeStyle = m.colorLight;
-    ctx.lineWidth   = 2;
+    ctx.lineWidth   = 3;
     ctx.beginPath();
-    ctx.arc(hx + CELL/2, hy + CELL/2, CELL/2 - pad, 0, Math.PI * 2);
+    ctx.arc(hx + CELL/2, hy + CELL/2, CELL * 0.7, 0, Math.PI * 2);
     ctx.stroke();
   } else {
     // Fallback: círculo de color con inicial del miembro
@@ -1830,11 +1841,17 @@ function playArmyBombSound() {
 let bgMusic = null;   // Elemento <audio> activo
 let musicMuted = false; // El usuario puede mutear desde el HUD (futuro)
 
+// Mapeo de archivos de audio — si el nombre real difiere del estándar
+const AUDIO_FILE_MAP = {
+  'rm': 'rm.mp3.mp3',  // El archivo subido tiene este nombre
+};
+
 function startBgMusic(memberId) {
   stopBgMusic(); // Para la canción anterior si existía
   try {
-    bgMusic      = new Audio(`audio/${memberId}.mp3`);
-    bgMusic.loop = true;
+    const fileName = AUDIO_FILE_MAP[memberId] || `${memberId}.mp3`;
+    bgMusic        = new Audio(`audio/${fileName}`);
+    bgMusic.loop   = true;
     bgMusic.volume = 0.35;  // Volumen moderado para no tapar los efectos
     // Solo reproduce si el archivo existe (onerror lo captura)
     bgMusic.play().catch(() => {}); // Silencia error de autoplay o 404
@@ -2018,6 +2035,33 @@ renderTitle();
 // applyControlMode() se llama en startGameplay() para no mostrar
 // el D-pad antes de entrar al juego. Solo inicializamos la variable.
 touchMode = ('ontouchstart' in window);
+
+// ─── Botones D-pad: sin ontouchstart inline para evitar recargas ───
+// Usamos addEventListener con preventDefault para bloquear comportamiento
+// por defecto del navegador (scroll, zoom, recarga) al tocar los botones.
+(function() {
+  const btnMap = {
+    'btn-up':    'UP',
+    'btn-down':  'DOWN',
+    'btn-left':  'LEFT',
+    'btn-right': 'RIGHT'
+  };
+  Object.entries(btnMap).forEach(([id, dir]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('touchstart', (e) => {
+      e.preventDefault();   // Evita scroll y comportamientos del navegador
+      el.classList.add('pressed');
+      mobileDir(dir);
+    }, { passive: false });
+    el.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      el.classList.remove('pressed');
+    }, { passive: false });
+    // Click también funciona para testing en desktop
+    el.addEventListener('click', () => mobileDir(dir));
+  });
+})();
 </script>
 </body>
 </html>
