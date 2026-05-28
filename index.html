@@ -75,7 +75,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: 'Noto Sans KR', sans-serif;
-  min-height: 100vh;
+  min-height: 100dvh;
   overflow-x: hidden;
 }
 
@@ -118,7 +118,7 @@ body::before {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* ============================================================
@@ -380,8 +380,11 @@ body::before {
 #screen-game {
   flex-direction: column;
   align-items: center;
-  padding: 1rem;
-  min-height: 100vh;
+  padding: 0.5rem 0.5rem 0 0.5rem;
+  height: 100dvh;
+  /* Deja espacio abajo para el D-pad fijo */
+  padding-bottom: 210px;
+  overflow: hidden;
 }
 
 /* Header del HUD: avatar/nombre a la izquierda, score a la derecha */
@@ -391,7 +394,7 @@ body::before {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.2rem;
 }
 
 /* HUD del miembro activo */
@@ -420,9 +423,9 @@ body::before {
   font-family: 'Black Han Sans', sans-serif;
   font-size: 1.1rem;
   color: var(--gold);
-  min-height: 1.5rem;
+  
   text-align: center;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.1rem;
   transition: opacity 0.3s;
   letter-spacing: 0.05em;
   text-shadow: 0 0 12px rgba(232,200,74,0.6);
@@ -433,9 +436,9 @@ body::before {
 #member-msg {
   font-size: 0.78rem;
   color: var(--purple-light);
-  min-height: 1.2rem;
+  
   text-align: center;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.1rem;
   font-style: italic;
   opacity: 0;
   transition: opacity 0.4s;
@@ -446,7 +449,8 @@ body::before {
 #canvas-wrap {
   position: relative;
   width: 100%;
-  max-width: 520px;
+  max-width: 600px;
+  flex: 1;
 }
 
 #game-canvas {
@@ -481,23 +485,29 @@ body::before {
 .overlay-song { font-size: 0.8rem; color: var(--purple-light); font-style: italic; margin-top: -0.25rem; }
 
 /* ─── CONTROLES MÓVILES (D-PAD) ──────────────────────────── */
-/* Visibilidad controlada por JS según el modo activo (no media query).
-   La clase .visible la agrega/quita toggleControls(). */
+/* Fijos en la parte inferior de la pantalla, siempre visibles en touch */
 .mobile-controls {
   display: none;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  margin-top: 0.5rem;
-  width: 100%;
-  max-width: 520px;
+  /* Fijo en el fondo */
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 8px 12px 12px;
+  background: rgba(13, 5, 24, 0.95);
+  border-top: 1px solid var(--purple-dark);
+  backdrop-filter: blur(8px);
 }
 .mobile-controls.visible { display: flex; }
 
-.ctrl-row { display: flex; gap: 6px; width: 100%; justify-content: center; }
+.ctrl-row { display: flex; gap: 6px; width: 100%; justify-content: center; max-width: 360px; }
 .ctrl-btn {
-  width: clamp(70px, 28vw, 160px);
-  height: clamp(70px, 15vw, 90px);
+  width: clamp(70px, 28vw, 140px);
+  height: clamp(60px, 14vw, 80px);
   background: var(--bg3);
   border: 2px solid var(--purple);
   border-radius: 14px;
@@ -510,7 +520,7 @@ body::before {
   touch-action: manipulation;
   transition: background 0.08s, transform 0.08s;
   flex: 1;
-  max-width: 160px;
+  max-width: 140px;
 }
 .ctrl-btn:active, .ctrl-btn.pressed {
   background: var(--purple-dark);
@@ -728,6 +738,9 @@ body::before {
 
   <!-- D-pad táctil (solo visible en dispositivos touch) -->
   <div class="mobile-controls" id="dpad">
+    <div id="ctrl-hint" style="color:var(--text-muted); font-size:0.7rem; text-align:center; margin-bottom:2px;">
+      D-pad o swipe para moverte · <strong style="color:var(--purple-light)">P</strong> pausa
+    </div>
     <div class="ctrl-row">
       <div class="ctrl-btn" id="btn-up">▲</div>
     </div>
@@ -736,10 +749,6 @@ body::before {
       <div class="ctrl-btn" id="btn-down">▼</div>
       <div class="ctrl-btn" id="btn-right">▶</div>
     </div>
-  </div>
-
-  <div id="ctrl-hint" style="color:var(--text-muted); font-size:0.75rem; margin-top:0.5rem; text-align:center;">
-    Flechas del teclado para moverte · <strong style="color:var(--purple-light)">P</strong> pausa
   </div>
 </div>
 
@@ -856,7 +865,7 @@ const MEMBERS = [
     eatSound: 'crunch',   // → playSound('crunch') al comer
     winEmoji: '📚',
     bio: 'Dale de comer a Nam!!',
-    song: '🎵 Mono — forever rain',
+    song: '🎵 Dont eAeon feat RM',
     msgs: [
       '"Namjooning mode: ON 🏛️"',
       '"Let\'s speak ourselves 📢"',
@@ -1161,7 +1170,8 @@ function renderLevels() {
 //   gameState  → estado completo del juego
 //   particles  → array de partículas de confetti al comer
 // ============================================================
-const GRID = 20;
+const GRID = 20;   // columnas (ancho)
+let GRID_H = 20;   // filas (alto) — se recalcula al iniciar nivel
 let CELL;
 let canvas, ctx;
 let gameLoop    = null;
@@ -1190,13 +1200,16 @@ function startLevel(idx) {
   canvas = document.getElementById('game-canvas');
   ctx    = canvas.getContext('2d');
 
-  // Ajusta el tamaño del canvas según el ancho disponible
-  // (responsive: en móvil será más pequeño)
-  const wrap  = document.getElementById('canvas-wrap');
-  const wrapW = Math.min(wrap.clientWidth, 520);
-  CELL        = Math.floor(wrapW / GRID);
+  // Canvas rectangular: ancho fijo por columnas, alto estira para llenar pantalla
+  const wrap      = document.getElementById('canvas-wrap');
+  const dpadH     = 210;
+  const headerH   = document.querySelector('.game-header').offsetHeight + 60;
+  const availableH = window.innerHeight - dpadH - headerH;
+  const availableW = wrap.clientWidth;
+  CELL    = Math.floor(Math.min(availableW, 560) / GRID);
+  GRID_H  = Math.floor(availableH / CELL);   // cuántas filas caben en el alto disponible
   canvas.width  = CELL * GRID;
-  canvas.height = CELL * GRID;
+  canvas.height = CELL * GRID_H;
 
   particles = []; // Limpia partículas de la partida anterior
   initGame();
@@ -1209,7 +1222,7 @@ function initGame() {
   if (gameLoop) clearInterval(gameLoop);
 
   const startX = Math.floor(GRID / 2);
-  const startY = Math.floor(GRID / 2);
+  const startY = Math.floor(GRID_H / 2);
 
   // La culebrita empieza con 3 segmentos en el centro, mirando a la derecha
   gameState = {
@@ -1286,8 +1299,8 @@ function tick() {
   };
 
   // Wrap de bordes: si sale por un lado entra por el otro
-  head.x = (head.x + GRID) % GRID;
-  head.y = (head.y + GRID) % GRID;
+  head.x = (head.x + GRID)   % GRID;
+  head.y = (head.y + GRID_H) % GRID_H;
 
   // Colisión con el cuerpo → muerte
   if (gameState.snake.some(s => s.x === head.x && s.y === head.y)) {
@@ -1367,7 +1380,7 @@ function placeFood() {
 
   // Busca posición libre (no ocupada por la culebrita ni otra comida)
   do {
-    pos = { x: Math.floor(Math.random() * GRID), y: Math.floor(Math.random() * GRID) };
+    pos = { x: Math.floor(Math.random() * GRID), y: Math.floor(Math.random() * GRID_H) };
     tries++;
   } while (
     tries < 100 &&
@@ -1460,7 +1473,7 @@ function renderGame() {
   // ── Cuadrícula de fondo ──
   ctx.strokeStyle = 'rgba(108,63,160,0.08)';
   ctx.lineWidth   = 0.5;
-  for (let i = 0; i <= GRID; i++) {
+  for (let i = 0; i <= Math.max(GRID, GRID_H); i++) {
     ctx.beginPath(); ctx.moveTo(i * CELL, 0);          ctx.lineTo(i * CELL, canvas.height); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(0, i * CELL);          ctx.lineTo(canvas.width, i * CELL);   ctx.stroke();
   }
@@ -1885,12 +1898,11 @@ function applyControlMode() {
     btn.textContent = '👆 Táctil';
     btn.classList.add('touch-mode');
     dpad.classList.add('visible');
-    hint.innerHTML  = 'D-pad o swipe para moverte · <strong style="color:var(--purple-light)">P</strong> pausa';
+    if (hint) hint.innerHTML  = 'D-pad o swipe para moverte · <strong style="color:var(--purple-light)">P</strong> pausa';
   } else {
     btn.textContent = '🎮 Teclado';
     btn.classList.remove('touch-mode');
     dpad.classList.remove('visible');
-    hint.innerHTML  = 'Flechas del teclado para moverte · <strong style="color:var(--purple-light)">P</strong> pausa';
   }
 }
 
